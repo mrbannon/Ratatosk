@@ -466,6 +466,24 @@ WLRemoteLinkStateRequestFailureError    = 2;
     return [CPURLConnection connectionWithRequest:aRequest delegate:aDelegate];
 }
 
+/*!
+    Connect to the remote server using the given request. Any link delegate will be given
+    a chance to make header modifications to set any authorisation details.
+
+    @param aContext an optional context object
+    @param withCredentials set to true iff authentication credentials should be sent in the XMLHTTPRequest
+*/
+- (CPURLConnection)sendRequest:(CPURLRequest)aRequest withDelegate:(id)aDelegate context:(id)aContext withCredentials:(BOOL)withCredentials
+{
+    if (authorizationHeader)
+        [aRequest setValue:authorizationHeader forHTTPHeaderField:@"Authorization"];
+
+    if ([delegate respondsToSelector:@selector(remoteLink:willSendRequest:withDelegate:context:)])
+        [delegate remoteLink:self willSendRequest:aRequest withDelegate:aDelegate context:aContext];
+
+    return [CPURLConnection connectionWithRequest:aRequest delegate:aDelegate withCredentials:withCredentials];
+}
+
 @end
 
 /*
@@ -525,11 +543,21 @@ var WLRemoteActionSerial = 1;
     JSObject            result @accessors;
     CPString            message @accessors;
     CPString            error @accessors(readonly);
+
+    BOOL                _withCredentials @accessors(property=withCredentials);
 }
 
 + (WLRemoteAction)schedule:(WLRemoteActionType)aType path:(CPString)aPath delegate:(id)aDelegate message:(CPString)aMessage
 {
     var action = [[WLRemoteAction alloc] initWithType:aType path:aPath delegate:aDelegate message:aMessage];
+    [action schedule];
+    return action;
+}
+
++ (WLRemoteAction)schedule:(WLRemoteActionType)aType path:(CPString)aPath delegate:(id)aDelegate message:(CPString)aMessage withCredentials:(BOOL)withCredentials
+{
+    var action = [[WLRemoteAction alloc] initWithType:aType path:aPath delegate:aDelegate message:aMessage];
+    [action setWithCredentials:withCredentials];
     [action schedule];
     return action;
 }
@@ -564,6 +592,7 @@ var WLRemoteActionSerial = 1;
         path = aPath;
         message = aMessage;
         payload = nil;
+        _withCredentials = NO;
         [self setDelegate:aDelegate];
     }
 
@@ -727,7 +756,7 @@ var WLRemoteActionSerial = 1;
 */
 - (CPURLConnection)makeConnectionWithRequest:(CPURLRequest)aRequest
 {
-    connection = [[self link] sendRequest:aRequest withDelegate:self context:self];
+    connection = [[self link] sendRequest:aRequest withDelegate:self context:self withCredentials:[self withCredentials]];
 }
 
 - (void)connection:(CPURLConnection)aConnection didReceiveResponse:(CPURLResponse)aResponse
